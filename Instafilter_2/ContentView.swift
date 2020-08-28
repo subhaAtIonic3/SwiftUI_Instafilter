@@ -19,7 +19,9 @@ struct ContentView: View {
     @State private var processedImage: UIImage?
     @State private var currentFilter: CIFilter = CIFilter.sepiaTone()
     @State private var showingFilterSheet = false
-    @State private var showNoImageSelectedAlert = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+    @State private var alertTitle = ""
     
     let context = CIContext()
     
@@ -63,7 +65,7 @@ struct ContentView: View {
         }
         if inputKeys.contains(kCIInputRadiusKey) { currentFilter.setValue(filterRadius * 300, forKey: kCIInputRadiusKey) }
         if inputKeys.contains(kCIInputScaleKey) { currentFilter.setValue(filterIntensity * 10, forKey: kCIInputScaleKey) }
-
+        
         
         guard let outputImage = currentFilter.outputImage else { return }
         if let cgImage = context.createCGImage(outputImage, from: outputImage.extent) {
@@ -130,10 +132,27 @@ struct ContentView: View {
                     
                     Button("Save") {
                         let imageSaver = ImageSaver()
+                        
+                        imageSaver.errorHandler = {
+                            self.showAlert.toggle()
+                            self.alertTitle = "Error!"
+                            self.alertMessage = $0.localizedDescription
+                        }
+                        
+                        imageSaver.successHandler = {
+                            print("Successfully saved")
+                            self.showAlert.toggle()
+                            self.alertTitle = "Success!"
+                            self.alertMessage = "Successfully saved"
+                        }
+                        
                         if self.processedImage != nil {
                             imageSaver.writeToPhotoAlbum(image: self.processedImage!)
                         } else {
-                            self.showNoImageSelectedAlert.toggle()
+                            print("inside else save")
+                            self.showAlert.toggle()
+                            self.alertTitle = "Error!"
+                            self.alertMessage = "Please select an image first"
                         }
                     }
                 }
@@ -152,8 +171,8 @@ struct ContentView: View {
                     .cancel()
                 ])
             }
-            .alert(isPresented: $showNoImageSelectedAlert) {
-                Alert(title: Text("Error!"), message: Text("Please select an Image first"), dismissButton: .default(Text("OK")))
+            .alert(isPresented: $showAlert) {
+                Alert(title: Text("\(alertTitle)"), message: Text("\(alertMessage)"), dismissButton: .default(Text("OK")))
             }
             .padding([.horizontal, .vertical])
             .navigationBarTitle("Instafilter")
@@ -168,15 +187,19 @@ struct ContentView_Previews: PreviewProvider {
 }
 
 class ImageSaver: NSObject {
+    
+    var errorHandler: ((Error) -> (Void))?
+    var successHandler: (() -> (Void))?
+    
     func writeToPhotoAlbum(image: UIImage) {
         UIImageWriteToSavedPhotosAlbum(image, self, #selector(saveImage), nil)
     }
     
     @objc func saveImage(_ image: UIImage?, didFinishSavingWithError error: Error?, context: UnsafeRawPointer ) {
         if error != nil {
-            print("Some error occurred!")
+            errorHandler?(error!)
         } else {
-            print("Successfully saved the image")
+            successHandler?()
         }
     }
 }
